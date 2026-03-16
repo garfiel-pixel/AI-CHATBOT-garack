@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Claude Opus 4.6 - Streaming Chat (Free via Puter.js)</title>
+    <style>
+        /* Reset & base */
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #202123;
+            color: #e5e5e5;
+            overflow: hidden;
+        }
+
+        header {
+            padding: 20px 30px;
+            background: #343541;
+            font-weight: 600;
+            font-size: 1.25rem;
+            border-bottom: 1px solid #444851;
+        }
+
+        #container {
+            display: flex;
+            height: calc(100vh - 60px);
+            overflow: hidden;
+        }
+
+        /* History section on the left */
+        #history {
+            width: 280px;
+            background: #2a2b32;
+            border-right: 1px solid #444851;
+            display: flex;
+            flex-direction: column;
+        }
+        #history h2 {
+            text-align: center;
+            padding: 15px 10px;
+            font-size: 1.1rem;
+            border-bottom: 1px solid #444851;
+            margin: 0;
+            color: #adbac7;
+        }
+        #historyList {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        .history-item {
+            background: #444851;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            padding: 10px;
+            cursor: pointer;
+            color: #adbac7;
+            font-size: 0.9rem;
+            user-select: none;
+            transition: background-color 0.2s ease;
+        }
+        .history-item:hover, .history-item.active {
+            background: #586069;
+            color: #fff;
+        }
+        #clearHistory {
+            background: transparent;
+            border: none;
+            color: #adbac7;
+            font-size: 0.85rem;
+            cursor: pointer;
+            padding: 10px 0;
+            border-top: 1px solid #444851;
+            transition: color 0.2s ease;
+        }
+        #clearHistory:hover {
+            color: #f85149;
+        }
+
+        /* Chat area */
+        #chat {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            background: #343541;
+        }
+
+        #messages {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 20px 24px;
+            scrollbar-width: thin;
+            scrollbar-color: #586069 transparent;
+        }
+        #messages::-webkit-scrollbar {
+            width: 8px;
+        }
+        #messages::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        #messages::-webkit-scrollbar-thumb {
+            background-color: #586069;
+            border-radius: 4px;
+        }
+
+        .message {
+            max-width: 70%;
+            padding: 12px 16px;
+            margin-bottom: 12px;
+            border-radius: 18px;
+            line-height: 1.4;
+            word-break: break-word;
+            white-space: pre-wrap;
+            box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
+            font-size: 0.95rem;
+        }
+        .message.user {
+            background: #0b78e3;
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+            border-bottom-left-radius: 18px;
+            border-top-right-radius: 18px;
+            border-top-left-radius: 18px;
+        }
+        .message.bot {
+            background: #444851;
+            color: #e1e1e1;
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+            border-bottom-right-radius: 18px;
+            border-top-left-radius: 18px;
+            border-top-right-radius: 18px;
+        }
+        .message.loading {
+            font-style: italic;
+            color: #8b949e;
+            background: transparent;
+            box-shadow: none;
+        }
+
+        /* Input area fixed at bottom */
+        #inputArea {
+            display: flex;
+            padding: 15px 24px;
+            border-top: 1px solid #444851;
+            background: #202123;
+        }
+        #inputArea textarea {
+            flex-grow: 1;
+            resize: none;
+            background: #343541;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 1rem;
+            color: #e5e5e5;
+            outline: none;
+            font-family: inherit;
+            min-height: 44px;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+        #inputArea button {
+            margin-left: 12px;
+            background: #0b78e3;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 0 24px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 1rem;
+            user-select: none;
+            transition: background-color 0.2s ease;
+        }
+        #inputArea button:disabled {
+            background: #3a4049;
+            cursor: not-allowed;
+        }
+        #inputArea button:hover:not(:disabled) {
+            background: #0a65c1;
+        }
+        
+        /* Scroll to bottom smooth */
+        #messages {
+            scroll-behavior: smooth;
+        }
+
+        /* Responsive */
+        @media(max-width: 720px) {
+            #container {
+                flex-direction: column;
+                height: 100vh;
+            }
+            #history {
+                width: 100%;
+                height: 180px;
+                border-right: none;
+                border-bottom: 1px solid #444851;
+                order: 2;
+            }
+            #chat {
+                order: 1;
+                height: calc(100vh - 240px);
+            }
+        }
+    </style>
+</head>
+<body>
+
+<header>Claude Opus 4.6 – Streaming Chat UI</header>
+
+<div id="container">
+    <section id="history">
+        <h2>History</h2>
+        <div id="historyList" tabindex="0" aria-label="Chat history"></div>
+        <button id="clearHistory" title="Clear chat history">Clear History</button>
+    </section>
+
+    <section id="chat" role="main" aria-live="polite" aria-atomic="true">
+        <div id="messages" aria-live="polite" aria-relevant="additions"></div>
+        <form id="inputArea" onsubmit="return false;">
+            <textarea id="question" rows="1" placeholder="Ask anything..."></textarea>
+            <button type="submit" id="sendBtn" disabled>Send</button>
+        </form>
+    </section>
+</div>
+
+<!-- Load Puter.js -->
+<script src="https://js.puter.com/v2/"></script>
+
+<script>
+    const questionInput = document.getElementById("question");
+    const sendBtn = document.getElementById("sendBtn");
+    const messages = document.getElementById("messages");
+    const historyList = document.getElementById("historyList");
+    const clearHistoryBtn = document.getElementById("clearHistory");
+
+    let chatHistory = [];
+    let isStreaming = false;
+
+    // Enable or disable send button based on input
+    questionInput.addEventListener("input", () => {
+        sendBtn.disabled = !questionInput.value.trim() || isStreaming;
+        questionInput.style.height = 'auto';
+        questionInput.style.height = questionInput.scrollHeight + 'px';
+    });
+
+    // Load history from localStorage
+    function loadHistory() {
+        const saved = localStorage.getItem("chatHistory");
+        if (saved) {
+            chatHistory = JSON.parse(saved);
+            renderHistory();
+        }
+    }
+
+    // Save history to localStorage
+    function saveHistory() {
+        localStorage.setItem("chatHistory", JSON.stringify(chatHistory));
+    }
+
+    // Render history items
+    function renderHistory() {
+        historyList.innerHTML = "";
+        if (chatHistory.length === 0) {
+            historyList.innerHTML = `<p style="color:#737b86; text-align:center; margin-top: 1rem;">No chat history yet</p>`;
+            return;
+        }
+
+        chatHistory.forEach((chat, idx) => {
+            const item = document.createElement("div");
+            item.className = "history-item";
+            // Show first 30 characters of user question
+            let preview = chat.user.trim();
+            if (preview.length > 30) preview = preview.slice(0, 27) + "...";
+            item.textContent = preview;
+            item.title = chat.user;
+            item.tabIndex = 0;
+
+            item.addEventListener("click", () => {
+                loadChat(idx);
+            });
+            item.addEventListener("keypress", (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    loadChat(idx);
+                }
+            });
+
+            historyList.appendChild(item);
+        });
+    }
+
+    // Load a chat from history, show messages
+    function loadChat(index) {
+        const chat = chatHistory[index];
+        if (!chat) return;
+        // Clear messages
+        messages.innerHTML = "";
+
+        // User message bubble
+        renderMessage(chat.user, "user");
+        // Bot message bubble with formatting
+        renderMessage(chat.bot, "bot");
+
+        highlightActiveHistory(index);
+    }
+
+    function highlightActiveHistory(index) {
+        [...historyList.children].forEach((child, i) => {
+            child.classList.toggle("active", i === index);
+        });
+    }
+
+    // Clear chat history button
+    clearHistoryBtn.addEventListener("click", () => {
+        if (confirm("Are you sure you want to clear all chat history?")) {
+            chatHistory = [];
+            saveHistory();
+            renderHistory();
+            messages.innerHTML = "";
+        }
+    });
+
+    // Append message bubble
+    function renderMessage(text, sender) {
+        const msgDiv = document.createElement("div");
+        msgDiv.className = `message ${sender}`;
+        msgDiv.innerHTML = text.replace(/\n/g, "<br>");
+        messages.appendChild(msgDiv);
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    // Add a loading placeholder bubble for streaming
+    function renderLoadingMessage() {
+        const msgDiv = document.createElement("div");
+        msgDiv.className = "message bot loading";
+        msgDiv.textContent = "Claude Opus 4.6 is thinking and typing...";
+        messages.appendChild(msgDiv);
+        messages.scrollTop = messages.scrollHeight;
+        return msgDiv;
+    }
+
+    // Clear loading message bubble
+    function clearLoadingMessage(loadingMsgDiv) {
+        if (loadingMsgDiv && loadingMsgDiv.parentNode) {
+            loadingMsgDiv.parentNode.removeChild(loadingMsgDiv);
+        }
+    }
+
+    async function startStreaming() {
+        if (isStreaming) return;
+        const question = questionInput.value.trim();
+        if (!question) {
+            alert("Please enter a question first!");
+            return;
+        }
+
+        isStreaming = true;
+        sendBtn.disabled = true;
+        questionInput.disabled = true;
+
+        // Add user's message
+        renderMessage(question, "user");
+        questionInput.value = "";
+        questionInput.style.height = 'auto';
+
+        // Loading message
+        const loadingMsgDiv = renderLoadingMessage();
+
+        try {
+            const stream = await puter.ai.chat(question, {
+                model: "claude-opus-4-6",
+                stream: true
+            });
+
+            clearLoadingMessage(loadingMsgDiv);
+
+            // We'll accumulate streamed parts here
+            let fullResponse = "";
+            // Render the bot answer container
+            const botMsgDiv = document.createElement("div");
+            botMsgDiv.className = "message bot";
+            messages.appendChild(botMsgDiv);
+            messages.scrollTop = messages.scrollHeight;
+
+            for await (const part of stream) {
+                if (part?.text) {
+                    fullResponse += part.text;
+                    botMsgDiv.innerHTML = fullResponse.replace(/\n/g, "<br>");
+                    messages.scrollTop = messages.scrollHeight;
+                }
+            }
+
+            // Save this Q&A in history and update UI
+            chatHistory.push({ user: question, bot: fullResponse });
+            saveHistory();
+            renderHistory();
+            highlightActiveHistory(chatHistory.length - 1); // Highlight last item
+
+        } catch (err) {
+            clearLoadingMessage(loadingMsgDiv);
+            renderMessage(`Error: ${err.message || "Something went wrong"} — please check console.`, "bot");
+            console.error("Streaming error:", err);
+        } finally {
+            isStreaming = false;
+            sendBtn.disabled = !questionInput.value.trim();
+            questionInput.disabled = false;
+            questionInput.focus();
+        }
+    }
+
+    // Send message on button or enter (shift+enter for newline)
+    sendBtn.addEventListener("click", () => startStreaming());
+    questionInput.addEventListener("keydown", e => {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            if (!sendBtn.disabled) startStreaming();
+        }
+    });
+
+    // Initial load
+    loadHistory();
+</script>
+
+</body>
+</html>
